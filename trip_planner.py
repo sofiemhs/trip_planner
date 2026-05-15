@@ -167,77 +167,63 @@ m3.metric("Total Activities", len(st.session_state.trip_data))
 
 st.divider()
 
-# --- ADD / EDIT ACTIVITY ---
-is_edit = st.session_state.edit_idx is not None
-edit_item = st.session_state.trip_data[st.session_state.edit_idx] if is_edit else {}
-
-with st.expander("➕ Add / Edit Activity", expanded=is_edit):
-    with st.form("activity_form", clear_on_submit=not is_edit):
+# --- ADD ACTIVITY (Top Section Only) ---
+with st.expander("➕ Add Activity", expanded=False):
+    with st.form("activity_form", clear_on_submit=True):
         f1, f2, f3 = st.columns([2, 1, 1])
         with f1:
-            act_name = st.text_input("Activity/Location Name", value=edit_item.get('activity', ''))
-            
-            # Manual Activity Type Selection
+            act_name = st.text_input("Activity/Location Name")
             type_opts = ["Excursion", "Travel", "Housing"]
-            def_type = edit_item.get('type', 'Excursion')
-            type_idx = type_opts.index(def_type) if def_type in type_opts else 0
-            act_type = st.selectbox("Activity Type", type_opts, index=type_idx)
-            
-            # Safe date parsing for edit mode
-            def_date = start_date
-            if is_edit and 'date' in edit_item:
-                try:
-                    def_date = datetime.strptime(edit_item['date'], "%Y-%m-%d").date()
-                except: pass
-            act_date = st.date_input("Date", value=def_date, min_value=start_date, max_value=end_date)
+            act_type = st.selectbox("Activity Type", type_opts, index=0)
+            act_date = st.date_input("Date", value=start_date, min_value=start_date, max_value=end_date)
             
         with f2:
-            act_start = st.text_input("Start Point (Optional)", value=edit_item.get('start_loc', ''))
-            act_end = st.text_input("End Point (Optional)", value=edit_item.get('end_loc', ''))
-            act_coords = st.text_input("Coordinates (lat, lon)", placeholder="e.g. 34.07, -118.44", value=edit_item.get('coords', ''))
-            act_cost = st.number_input("Cost ($)", min_value=0.0, value=float(edit_item.get('cost', 0.0)))
+            act_start = st.text_input("Start Point (Optional)")
+            act_coords_start = st.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44")
+            act_end = st.text_input("End Point (Optional)")
+            act_coords_end = st.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12")
             
         with f3:
+            act_cost = st.number_input("Cost ($)", min_value=0.0, value=0.0)
             status_opts = ["Planned", "Planned but not booked", "Needs Review"]
-            def_status = edit_item.get('status', 'Needs Review')
-            stat_idx = status_opts.index(def_status) if def_status in status_opts else 0
-            act_status = st.selectbox("Status", status_opts, index=stat_idx)
-            act_link = st.text_input("Link (URL)", value=edit_item.get('link', ''))
+            act_status = st.selectbox("Status", status_opts, index=0)
+            act_link = st.text_input("Link (URL)")
             
-        act_notes = st.text_area("Notes", value=edit_item.get('notes', ''))
+        act_notes = st.text_area("Notes")
         
         traveler_names = [t["name"] for t in st.session_state.travelers]
-        if is_edit:
-            def_people = [p for p in edit_item.get('people', []) if p in traveler_names]
-        else:
-            def_people = traveler_names[:1] if traveler_names else []
-            
-        act_people = st.multiselect("Assign To", traveler_names, default=def_people)
+        act_people = st.multiselect("Assign To", traveler_names, default=traveler_names[:1] if traveler_names else [])
         
-        submit_label = "Update Activity" if is_edit else "Confirm Activity"
-        if st.form_submit_button(submit_label, use_container_width=True):
+        if st.form_submit_button("Confirm Activity", use_container_width=True):
             if act_name:
                 
                 # Apply Emojis and Colors based on manual selection
                 if act_type == "Travel":
-                    detected_emoji = "✈️"
-                    color_hex = "#4285F4" # Blue map pin
+                    detected_emoji, color_hex = "✈️", "#4285F4"
                 elif act_type == "Housing":
-                    detected_emoji = "🏨"
-                    color_hex = "#34A853" # Green map pin
+                    detected_emoji, color_hex = "🏨", "#34A853"
                 else:
-                    detected_emoji = "🎒"
-                    color_hex = "#EA4335" # Red map pin
+                    detected_emoji, color_hex = "🎒", "#EA4335"
                 
-                # Parse the coordinates safely
-                parsed_lat, parsed_lon = None, None
-                if act_coords:
+                # Parse Start coordinates safely
+                parsed_lat_start, parsed_lon_start = None, None
+                if act_coords_start:
                     try:
-                        lat_str, lon_str = act_coords.split(",")
-                        parsed_lat = float(lat_str.strip())
-                        parsed_lon = float(lon_str.strip())
+                        lat_str, lon_str = act_coords_start.split(",")
+                        parsed_lat_start = float(lat_str.strip())
+                        parsed_lon_start = float(lon_str.strip())
                     except ValueError:
-                        st.error("⚠️ Invalid coordinate format. Please use 'lat, lon'. Activity saved without coordinates on the map.")
+                        st.error("⚠️ Invalid Start coordinate format. Please use 'lat, lon'. Activity saved without start coordinates on the map.")
+
+                # Parse End coordinates safely
+                parsed_lat_end, parsed_lon_end = None, None
+                if act_coords_end:
+                    try:
+                        lat_str, lon_str = act_coords_end.split(",")
+                        parsed_lat_end = float(lat_str.strip())
+                        parsed_lon_end = float(lon_str.strip())
+                    except ValueError:
+                        st.error("⚠️ Invalid End coordinate format. Please use 'lat, lon'. Activity saved without end coordinates on the map.")
                 
                 new_data = {
                     "date": str(act_date),
@@ -245,9 +231,12 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
                     "type": act_type,
                     "emoji": detected_emoji,
                     "color": color_hex,
-                    "coords": act_coords, # Save the raw string so it stays in the text box when editing
-                    "lat": parsed_lat,    # Save the parsed float for the map
-                    "lon": parsed_lon,    # Save the parsed float for the map
+                    "coords_start": act_coords_start,
+                    "lat_start": parsed_lat_start,
+                    "lon_start": parsed_lon_start,
+                    "coords_end": act_coords_end,
+                    "lat_end": parsed_lat_end,
+                    "lon_end": parsed_lon_end,
                     "start_loc": act_start,
                     "end_loc": act_end,
                     "people": act_people,
@@ -256,23 +245,9 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
                     "link": act_link,
                     "notes": act_notes
                 }
-                if is_edit:
-                    st.session_state.trip_data[st.session_state.edit_idx] = new_data
-                    st.session_state.edit_idx = None
-                else:
-                    st.session_state.trip_data.append(new_data)
-                st.rerun()
                 
-    # Separate Cancel/Delete buttons when in Edit Mode
-    if is_edit:
-        c1, c2 = st.columns(2)
-        if c1.button("❌ Cancel Edit", use_container_width=True):
-            st.session_state.edit_idx = None
-            st.rerun()
-        if c2.button("🗑️ Delete Activity", use_container_width=True):
-            st.session_state.trip_data.pop(st.session_state.edit_idx)
-            st.session_state.edit_idx = None
-            st.rerun()
+                st.session_state.trip_data.append(new_data)
+                st.rerun()
 
 # --- ITINERARY ---
 status_colors = {"Planned": "#2D6A4F", "Planned but not booked": "#FFB703", "Needs Review": "#BC4749"}
@@ -288,34 +263,144 @@ for d in date_range:
     else:
         for idx, item in enumerate(st.session_state.trip_data):
             if item.get('date') == date_str:
-                # Safe fetching of people list
-                people_list = item.get('people', [])
                 
-                # Color Logic
-                if len(people_list) > 1: card_bg = shared_color
-                elif len(people_list) == 1:
-                    card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#FFFFFF")
-                else: card_bg = "#FFFFFF"
-                
-                status_val = item.get('status', 'Needs Review')
-                border_color = status_colors.get(status_val, "#333")
-                
-                with st.container():
+                # --- INLINE EDIT BLOCK ---
+                if st.session_state.edit_idx == idx:
+                    with st.container():
+                        st.markdown(f"<div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
+                        st.markdown("<h4 style='color: #004D00 !important; text-shadow: none;'>✏️ Edit Activity</h4>", unsafe_allow_html=True)
+                        with st.form(key=f"inline_edit_{idx}"):
+                            ef1, ef2, ef3 = st.columns([2, 1, 1])
+                            with ef1:
+                                e_name = st.text_input("Activity/Location Name", value=item.get('activity', ''), key=f"ename_{idx}")
+                                type_opts = ["Excursion", "Travel", "Housing"]
+                                def_type = item.get('type', 'Excursion')
+                                type_idx = type_opts.index(def_type) if def_type in type_opts else 0
+                                e_type = st.selectbox("Activity Type", type_opts, index=type_idx, key=f"etype_{idx}")
+                                
+                                def_date = start_date
+                                try: def_date = datetime.strptime(item.get('date', str(start_date)), "%Y-%m-%d").date()
+                                except: pass
+                                e_date = st.date_input("Date", value=def_date, min_value=start_date, max_value=end_date, key=f"edate_{idx}")
+                                
+                            with ef2:
+                                # Provide backward compatibility with older "coords" key
+                                old_c = item.get('coords', '')
+                                val_c_start = item.get('coords_start', old_c)
+                                val_c_end = item.get('coords_end', '')
+                                
+                                e_start = st.text_input("Start Point (Optional)", value=item.get('start_loc', ''), key=f"estart_{idx}")
+                                e_coords_start = st.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44", value=val_c_start, key=f"ecoords_s_{idx}")
+                                e_end = st.text_input("End Point (Optional)", value=item.get('end_loc', ''), key=f"eend_{idx}")
+                                e_coords_end = st.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12", value=val_c_end, key=f"ecoords_e_{idx}")
+                                
+                            with ef3:
+                                e_cost = st.number_input("Cost ($)", min_value=0.0, value=float(item.get('cost', 0.0)), key=f"ecost_{idx}")
+                                status_opts = ["Planned", "Planned but not booked", "Needs Review"]
+                                def_status = item.get('status', 'Needs Review')
+                                stat_idx = status_opts.index(def_status) if def_status in status_opts else 0
+                                e_status = st.selectbox("Status", status_opts, index=stat_idx, key=f"estatus_{idx}")
+                                e_link = st.text_input("Link (URL)", value=item.get('link', ''), key=f"elink_{idx}")
+                                
+                            e_notes = st.text_area("Notes", value=item.get('notes', ''), key=f"enotes_{idx}")
+                            
+                            traveler_names = [t["name"] for t in st.session_state.travelers]
+                            def_people = [p for p in item.get('people', []) if p in traveler_names]
+                            e_people = st.multiselect("Assign To", traveler_names, default=def_people, key=f"epeople_{idx}")
+                            
+                            if st.form_submit_button("💾 Save Changes", use_container_width=True):
+                                if e_name:
+                                    if e_type == "Travel":
+                                        detected_emoji, color_hex = "✈️", "#4285F4"
+                                    elif e_type == "Housing":
+                                        detected_emoji, color_hex = "🏨", "#34A853"
+                                    else:
+                                        detected_emoji, color_hex = "🎒", "#EA4335"
+                                    
+                                    # Parse Start coordinates safely
+                                    parsed_lat_start, parsed_lon_start = None, None
+                                    if e_coords_start:
+                                        try:
+                                            lat_str, lon_str = e_coords_start.split(",")
+                                            parsed_lat_start = float(lat_str.strip())
+                                            parsed_lon_start = float(lon_str.strip())
+                                        except ValueError:
+                                            st.error("⚠️ Invalid Start coordinate format. Please use 'lat, lon'.")
+
+                                    # Parse End coordinates safely
+                                    parsed_lat_end, parsed_lon_end = None, None
+                                    if e_coords_end:
+                                        try:
+                                            lat_str, lon_str = e_coords_end.split(",")
+                                            parsed_lat_end = float(lat_str.strip())
+                                            parsed_lon_end = float(lon_str.strip())
+                                        except ValueError:
+                                            st.error("⚠️ Invalid End coordinate format. Please use 'lat, lon'.")
+                                            
+                                    st.session_state.trip_data[idx] = {
+                                        "date": str(e_date),
+                                        "activity": e_name,
+                                        "type": e_type,
+                                        "emoji": detected_emoji,
+                                        "color": color_hex,
+                                        "coords_start": e_coords_start,
+                                        "lat_start": parsed_lat_start,
+                                        "lon_start": parsed_lon_start,
+                                        "coords_end": e_coords_end,
+                                        "lat_end": parsed_lat_end,
+                                        "lon_end": parsed_lon_end,
+                                        "start_loc": e_start,
+                                        "end_loc": e_end,
+                                        "people": e_people,
+                                        "status": e_status,
+                                        "cost": e_cost,
+                                        "link": e_link,
+                                        "notes": e_notes
+                                    }
+                                    st.session_state.edit_idx = None
+                                    st.rerun()
+                                    
+                        # Buttons outside the form for Cancel and Delete
+                        c1, c2 = st.columns(2)
+                        if c1.button("❌ Cancel Edit", key=f"cancel_{idx}", use_container_width=True):
+                            st.session_state.edit_idx = None
+                            st.rerun()
+                        if c2.button("🗑️ Delete Activity", key=f"del_{idx}", use_container_width=True):
+                            st.session_state.trip_data.pop(idx)
+                            st.session_state.edit_idx = None
+                            st.rerun()
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                # --- STANDARD CARD BLOCK ---
+                else:
+                    # Safe fetching of people list
+                    people_list = item.get('people', [])
                     
-                    # Pre-format the dynamic HTML elements so there are absolutely no newlines causing markdown breaks
-                    route_html = f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""
-                    link_html = f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""
-                    notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
+                    # Color Logic
+                    if len(people_list) > 1: card_bg = shared_color
+                    elif len(people_list) == 1:
+                        card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#FFFFFF")
+                    else: card_bg = "#FFFFFF"
                     
-                    # Construct single continuous HTML string
-                    card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
+                    status_val = item.get('status', 'Needs Review')
+                    border_color = status_colors.get(status_val, "#333")
                     
-                    st.markdown(card_html, unsafe_allow_html=True)
-                    
-                    # Just the Pencil Edit Button
-                    if st.button("✏️ Edit Activity", key=f"edit_{idx}", use_container_width=True):
-                        st.session_state.edit_idx = idx
-                        st.rerun()
+                    with st.container():
+                        
+                        # Pre-format the dynamic HTML elements so there are absolutely no newlines causing markdown breaks
+                        route_html = f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""
+                        link_html = f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""
+                        notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
+                        
+                        # Construct single continuous HTML string
+                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
+                        
+                        st.markdown(card_html, unsafe_allow_html=True)
+                        
+                        # Just the Pencil Edit Button
+                        if st.button("✏️ Edit Activity", key=f"edit_{idx}", use_container_width=True):
+                            st.session_state.edit_idx = idx
+                            st.rerun()
 
 st.divider()
 
@@ -332,18 +417,36 @@ with st.expander("🗺️ Travel Route Map", expanded=True):
     path_coords = []
     
     for activity in sorted_activities:
-        if activity.get('lat') is not None and activity.get('lon') is not None:
-            # Convert hex string (e.g., "#EA4335") to RGB list (e.g., [234, 67, 53]) for PyDeck
-            hex_c = activity.get('color', '#EA4335').lstrip('#')
-            rgb = [int(hex_c[i:i+2], 16) for i in (0, 2, 4)]
-            
+        # Fallback to older 'lat'/'lon' structure to maintain backwards compatibility
+        lat_s = activity.get('lat_start', activity.get('lat'))
+        lon_s = activity.get('lon_start', activity.get('lon'))
+        lat_e = activity.get('lat_end')
+        lon_e = activity.get('lon_end')
+        
+        # Convert hex string (e.g., "#EA4335") to RGB list (e.g., [234, 67, 53]) for PyDeck
+        hex_c = activity.get('color', '#EA4335').lstrip('#')
+        rgb = [int(hex_c[i:i+2], 16) for i in (0, 2, 4)]
+        
+        has_both = (lat_s is not None) and (lat_e is not None)
+        base_name = activity.get("activity", "Unknown")
+        
+        if lat_s is not None and lon_s is not None:
             map_data.append({
-                "name": activity.get("activity", "Unknown"),
-                "lat": activity.get('lat'), 
-                "lon": activity.get('lon'),
+                "name": f"{base_name} (Start)" if has_both else base_name,
+                "lat": lat_s, 
+                "lon": lon_s,
                 "color": rgb
             })
-            path_coords.append([activity.get('lon'), activity.get('lat')])
+            path_coords.append([lon_s, lat_s])
+            
+        if lat_e is not None and lon_e is not None:
+            map_data.append({
+                "name": f"{base_name} (End)",
+                "lat": lat_e, 
+                "lon": lon_e,
+                "color": rgb
+            })
+            path_coords.append([lon_e, lat_e])
             
     if map_data:
         # Define PyDeck Scatterplot Layer (The Pins)
