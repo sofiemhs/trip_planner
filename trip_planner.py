@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import json
 import pydeck as pdk
+import math
 
 # --- CONFIG ---
 st.set_page_config(page_title="Trip Planner", layout="wide", page_icon="📍")
@@ -157,38 +158,66 @@ with st.sidebar:
 # --- CALCULATIONS ---
 total_cost = sum(item.get('cost', 0.0) for item in st.session_state.trip_data)
 
+def haversine_miles(lat1, lon1, lat2, lon2):
+    R = 3958.8  # Radius of Earth in miles
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+# Compute Miles Traveled
+sorted_activities_calc = sorted(st.session_state.trip_data, key=lambda x: x.get('date', '9999-12-31'))
+path_calc = []
+for activity in sorted_activities_calc:
+    lat_s = activity.get('lat_start', activity.get('lat'))
+    lon_s = activity.get('lon_start', activity.get('lon'))
+    lat_e = activity.get('lat_end')
+    lon_e = activity.get('lon_end')
+    
+    if lat_s is not None and lon_s is not None:
+        path_calc.append((lat_s, lon_s))
+    if lat_e is not None and lon_e is not None:
+        path_calc.append((lat_e, lon_e))
+
+total_miles = 0.0
+for i in range(len(path_calc) - 1):
+    total_miles += haversine_miles(path_calc[i][0], path_calc[i][1], path_calc[i+1][0], path_calc[i+1][1])
+
 # --- MAIN CONTENT ---
 st.markdown(f"<h1 style='text-align: center; font-size: 3rem;'>{trip_name}</h1>", unsafe_allow_html=True)
 
 m1, m2, m3 = st.columns(3)
 m1.metric("Total Budget", f"${total_cost:,.2f}")
 m2.metric("Trip Duration", f"{(end_date - start_date).days + 1} Days")
-m3.metric("Total Activities", len(st.session_state.trip_data))
+m3.metric("Miles Traveled", f"{total_miles:,.0f} mi")
 
 st.divider()
 
 # --- ADD ACTIVITY (Top Section Only) ---
 with st.expander("➕ Add Activity", expanded=False):
     with st.form("activity_form", clear_on_submit=True):
-        f1, f2, f3 = st.columns([2, 1, 1])
-        with f1:
-            act_name = st.text_input("Activity/Location Name")
-            type_opts = ["Excursion", "Travel", "Housing"]
-            act_type = st.selectbox("Activity Type", type_opts, index=0)
-            act_date = st.date_input("Date", value=start_date, min_value=start_date, max_value=end_date)
-            
-        with f2:
-            act_start = st.text_input("Start Point (Optional)")
-            act_coords_start = st.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44")
-            act_end = st.text_input("End Point (Optional)")
-            act_coords_end = st.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12")
-            
-        with f3:
-            act_cost = st.number_input("Cost ($)", min_value=0.0, value=0.0)
-            status_opts = ["Planned", "Planned but not booked", "Needs Review"]
-            act_status = st.selectbox("Status", status_opts, index=0)
-            act_link = st.text_input("Link (URL)")
-            
+        
+        # Row 1
+        r1c1, r1c2, r1c3 = st.columns(3)
+        act_name = r1c1.text_input("Activity/Location Name")
+        act_start = r1c2.text_input("Start Point (Optional)")
+        act_coords_start = r1c3.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44")
+        
+        # Row 2
+        r2c1, r2c2, r2c3 = st.columns(3)
+        type_opts = ["Excursion", "Travel", "Housing"]
+        act_type = r2c1.selectbox("Activity Type", type_opts, index=0)
+        act_end = r2c2.text_input("End Point (Optional)")
+        act_coords_end = r2c3.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12")
+        
+        # Row 3
+        r3c1, r3c2, r3c3 = st.columns(3)
+        status_opts = ["Booked", "Planned but not booked", "Needs Review"]
+        act_status = r3c1.selectbox("Status", status_opts, index=0)
+        act_cost = r3c2.number_input("Cost ($)", min_value=0.0, value=0.0)
+        act_date = r3c3.date_input("Date", value=start_date, min_value=start_date, max_value=end_date)
+        
         act_notes = st.text_area("Notes")
         
         traveler_names = [t["name"] for t in st.session_state.travelers]
@@ -242,7 +271,6 @@ with st.expander("➕ Add Activity", expanded=False):
                     "people": act_people,
                     "status": act_status,
                     "cost": act_cost,
-                    "link": act_link,
                     "notes": act_notes
                 }
                 
@@ -250,7 +278,7 @@ with st.expander("➕ Add Activity", expanded=False):
                 st.rerun()
 
 # --- ITINERARY ---
-status_colors = {"Planned": "#2D6A4F", "Planned but not booked": "#FFB703", "Needs Review": "#BC4749"}
+status_colors = {"Booked": "#2D6A4F", "Planned but not booked": "#FFB703", "Needs Review": "#BC4749"}
 date_range = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
 
 for d in date_range:
@@ -270,38 +298,40 @@ for d in date_range:
                         st.markdown(f"<div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px;'>", unsafe_allow_html=True)
                         st.markdown("<h4 style='color: #004D00 !important; text-shadow: none;'>✏️ Edit Activity</h4>", unsafe_allow_html=True)
                         with st.form(key=f"inline_edit_{idx}"):
-                            ef1, ef2, ef3 = st.columns([2, 1, 1])
-                            with ef1:
-                                e_name = st.text_input("Activity/Location Name", value=item.get('activity', ''), key=f"ename_{idx}")
-                                type_opts = ["Excursion", "Travel", "Housing"]
-                                def_type = item.get('type', 'Excursion')
-                                type_idx = type_opts.index(def_type) if def_type in type_opts else 0
-                                e_type = st.selectbox("Activity Type", type_opts, index=type_idx, key=f"etype_{idx}")
-                                
-                                def_date = start_date
-                                try: def_date = datetime.strptime(item.get('date', str(start_date)), "%Y-%m-%d").date()
-                                except: pass
-                                e_date = st.date_input("Date", value=def_date, min_value=start_date, max_value=end_date, key=f"edate_{idx}")
-                                
-                            with ef2:
-                                # Provide backward compatibility with older "coords" key
-                                old_c = item.get('coords', '')
-                                val_c_start = item.get('coords_start', old_c)
-                                val_c_end = item.get('coords_end', '')
-                                
-                                e_start = st.text_input("Start Point (Optional)", value=item.get('start_loc', ''), key=f"estart_{idx}")
-                                e_coords_start = st.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44", value=val_c_start, key=f"ecoords_s_{idx}")
-                                e_end = st.text_input("End Point (Optional)", value=item.get('end_loc', ''), key=f"eend_{idx}")
-                                e_coords_end = st.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12", value=val_c_end, key=f"ecoords_e_{idx}")
-                                
-                            with ef3:
-                                e_cost = st.number_input("Cost ($)", min_value=0.0, value=float(item.get('cost', 0.0)), key=f"ecost_{idx}")
-                                status_opts = ["Planned", "Planned but not booked", "Needs Review"]
-                                def_status = item.get('status', 'Needs Review')
-                                stat_idx = status_opts.index(def_status) if def_status in status_opts else 0
-                                e_status = st.selectbox("Status", status_opts, index=stat_idx, key=f"estatus_{idx}")
-                                e_link = st.text_input("Link (URL)", value=item.get('link', ''), key=f"elink_{idx}")
-                                
+                            
+                            # Row 1
+                            er1c1, er1c2, er1c3 = st.columns(3)
+                            e_name = er1c1.text_input("Activity/Location Name", value=item.get('activity', ''), key=f"ename_{idx}")
+                            e_start = er1c2.text_input("Start Point (Optional)", value=item.get('start_loc', ''), key=f"estart_{idx}")
+                            # Provide backward compatibility with older "coords" key
+                            old_c = item.get('coords', '')
+                            val_c_start = item.get('coords_start', old_c)
+                            e_coords_start = er1c3.text_input("Start Coords (lat, lon)", placeholder="e.g. 34.07, -118.44", value=val_c_start, key=f"ecoords_s_{idx}")
+
+                            # Row 2
+                            er2c1, er2c2, er2c3 = st.columns(3)
+                            type_opts = ["Excursion", "Travel", "Housing"]
+                            def_type = item.get('type', 'Excursion')
+                            type_idx = type_opts.index(def_type) if def_type in type_opts else 0
+                            e_type = er2c1.selectbox("Activity Type", type_opts, index=type_idx, key=f"etype_{idx}")
+                            e_end = er2c2.text_input("End Point (Optional)", value=item.get('end_loc', ''), key=f"eend_{idx}")
+                            val_c_end = item.get('coords_end', '')
+                            e_coords_end = er2c3.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12", value=val_c_end, key=f"ecoords_e_{idx}")
+
+                            # Row 3
+                            er3c1, er3c2, er3c3 = st.columns(3)
+                            status_opts = ["Booked", "Planned but not booked", "Needs Review"]
+                            def_status = item.get('status', 'Needs Review')
+                            if def_status == "Planned": def_status = "Booked" # Catch old saves
+                            stat_idx = status_opts.index(def_status) if def_status in status_opts else 0
+                            e_status = er3c1.selectbox("Status", status_opts, index=stat_idx, key=f"estatus_{idx}")
+                            e_cost = er3c2.number_input("Cost ($)", min_value=0.0, value=float(item.get('cost', 0.0)), key=f"ecost_{idx}")
+                            
+                            def_date = start_date
+                            try: def_date = datetime.strptime(item.get('date', str(start_date)), "%Y-%m-%d").date()
+                            except: pass
+                            e_date = er3c3.date_input("Date", value=def_date, min_value=start_date, max_value=end_date, key=f"edate_{idx}")
+                            
                             e_notes = st.text_area("Notes", value=item.get('notes', ''), key=f"enotes_{idx}")
                             
                             traveler_names = [t["name"] for t in st.session_state.travelers]
@@ -354,7 +384,6 @@ for d in date_range:
                                         "people": e_people,
                                         "status": e_status,
                                         "cost": e_cost,
-                                        "link": e_link,
                                         "notes": e_notes
                                     }
                                     st.session_state.edit_idx = None
@@ -383,17 +412,17 @@ for d in date_range:
                     else: card_bg = "#FFFFFF"
                     
                     status_val = item.get('status', 'Needs Review')
+                    if status_val == "Planned": status_val = "Booked" # Catch old saves
                     border_color = status_colors.get(status_val, "#333")
                     
                     with st.container():
                         
                         # Pre-format the dynamic HTML elements so there are absolutely no newlines causing markdown breaks
                         route_html = f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""
-                        link_html = f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""
                         notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
                         
                         # Construct single continuous HTML string
-                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
+                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
                         
                         st.markdown(card_html, unsafe_allow_html=True)
                         
