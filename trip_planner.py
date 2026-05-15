@@ -421,15 +421,20 @@ for d in date_range:
                         route_html = f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""
                         notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
                         
-                        # Construct single continuous HTML string
-                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
+                        # Construct single continuous HTML string with margin-bottom hack to pull the button inside visually
+                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg}; margin-bottom: -60px; padding-bottom: 75px; position: relative;"><div style="display: flex; justify-content: space-between; align-items: flex-start;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px; width: 75%;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
                         
                         st.markdown(card_html, unsafe_allow_html=True)
                         
-                        # Just the Pencil Edit Button
-                        if st.button("✏️ Edit Activity", key=f"edit_{idx}", use_container_width=True):
-                            st.session_state.edit_idx = idx
-                            st.rerun()
+                        # Just the Pencil Edit Button, pulled up directly under the status bubble using columns
+                        col_empty, col_btn = st.columns([5, 1.5])
+                        with col_btn:
+                            if st.button("✏️ Edit Activity", key=f"edit_{idx}", use_container_width=True):
+                                st.session_state.edit_idx = idx
+                                st.rerun()
+                                
+                        # Spacer to fix the layout for the next card below
+                        st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
 
 st.divider()
 
