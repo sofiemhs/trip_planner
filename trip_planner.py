@@ -406,15 +406,29 @@ for d in date_range:
                     # Safe fetching of people list
                     people_list = item.get('people', [])
                     
-                    # Color Logic
-                    if len(people_list) > 1: card_bg = shared_color
-                    elif len(people_list) == 1:
-                        card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#FFFFFF")
-                    else: card_bg = "#FFFFFF"
+                    # --- NEW COLOR LOGIC ---
                     
+                    # 1. Main Background Color (Based on Activity Type)
+                    act_type_color = item.get('type', 'Excursion')
+                    if act_type_color == "Travel":
+                        card_bg = "#E3F2FD" # Light Blue
+                    elif act_type_color == "Housing":
+                        card_bg = "#E8F5E9" # Light Green
+                    else:
+                        card_bg = "#FFEBEE" # Light Red/Pink
+                        
+                    # 2. Side Bar Color (Left Border, Based on Assigned People)
+                    if len(people_list) > 1: 
+                        left_border_color = shared_color
+                    elif len(people_list) == 1:
+                        left_border_color = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#CCCCCC")
+                    else: 
+                        left_border_color = "#CCCCCC"
+                    
+                    # 3. Status Bubble Color
                     status_val = item.get('status', 'Needs Review')
                     if status_val == "Planned": status_val = "Booked" # Catch old saves
-                    border_color = status_colors.get(status_val, "#333")
+                    status_bg = status_colors.get(status_val, "#333")
                     
                     with st.container():
                         
@@ -424,7 +438,7 @@ for d in date_range:
                         
                         # Construct single continuous HTML string 
                         # Grid is strictly split 80% (Title) / 20% (Status Bubble) to perfectly align with the button column below
-                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg}; margin-bottom: -60px; padding-bottom: 75px; position: relative;"><div style="display: flex; align-items: flex-start;"><div style="width: 80%;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span></div><div style="width: 20%; display: flex; justify-content: flex-start;"><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px; white-space: nowrap;">{status_val.upper()}</span></div></div><div style="margin-top: 10px; width: 75%;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
+                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {left_border_color}; background-color: {card_bg}; margin-bottom: -60px; padding-bottom: 75px; position: relative;"><div style="display: flex; align-items: flex-start;"><div style="width: 80%;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span></div><div style="width: 20%; display: flex; justify-content: flex-start;"><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {status_bg}; padding: 6px 14px; border-radius: 4px; white-space: nowrap;">{status_val.upper()}</span></div></div><div style="margin-top: 10px; width: 75%;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
                         
                         st.markdown(card_html, unsafe_allow_html=True)
                         
