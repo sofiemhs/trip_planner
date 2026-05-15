@@ -98,7 +98,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- SESSION STATE ---
+# --- SESSION STATE INITIALIZATION ---
+if 'trip_name' not in st.session_state:
+    st.session_state.trip_name = "Italy Coastline 2026"
+    
+if 'start_date' not in st.session_state:
+    st.session_state.start_date = datetime.now().date()
+    
+if 'end_date' not in st.session_state:
+    st.session_state.end_date = (datetime.now() + timedelta(days=7)).date()
+
 if 'trip_data' not in st.session_state:
     st.session_state.trip_data = []
 
@@ -114,11 +123,11 @@ if 'uploaded_file_id' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h1 style='color: #004D00 !important; text-shadow: none !important; opacity: 1 !important;'>Trip Setup</h1>", unsafe_allow_html=True)
-    trip_name = st.text_input("Trip Name", value="Italy Coastline 2026")
+    trip_name = st.text_input("Trip Name", key="trip_name")
     
     col_a, col_b = st.columns(2)
-    start_date = col_a.date_input("Start Date", datetime.now())
-    end_date = col_b.date_input("End Date", datetime.now() + timedelta(days=7))
+    start_date = col_a.date_input("Start Date", key="start_date")
+    end_date = col_b.date_input("End Date", key="end_date")
     
     st.divider()
     
@@ -144,7 +153,16 @@ with st.sidebar:
     st.divider()
     
     st.markdown("<h3 style='color: #004D00 !important; text-shadow: none !important; opacity: 1 !important;'>Data Management</h3>", unsafe_allow_html=True)
-    trip_json = json.dumps(st.session_state.trip_data, indent=4)
+    
+    # Bundle all trip data together into one dictionary before saving
+    export_data = {
+        "trip_name": st.session_state.trip_name,
+        "start_date": str(st.session_state.start_date),
+        "end_date": str(st.session_state.end_date),
+        "travelers": st.session_state.travelers,
+        "trip_data": st.session_state.trip_data
+    }
+    trip_json = json.dumps(export_data, indent=4)
     st.download_button("💾 save plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
     st.caption("How to upload: Click 'Browse files' below and select a previously saved 'trip_plan.json' file to restore your itinerary data.")
@@ -152,12 +170,41 @@ with st.sidebar:
     
     # Check if a new file was uploaded to prevent constant overwriting
     if uploaded_file and uploaded_file.file_id != st.session_state.uploaded_file_id:
-        st.session_state.trip_data = json.load(uploaded_file)
+        loaded_data = json.load(uploaded_file)
+        
+        # Check for backwards compatibility with older save files (which were just lists)
+        if isinstance(loaded_data, list):
+            st.session_state.trip_data = loaded_data
+        else:
+            # Load new format saves
+            st.session_state.trip_name = loaded_data.get("trip_name", "Italy Coastline 2026")
+            
+            s_date_str = loaded_data.get("start_date")
+            if s_date_str:
+                try: st.session_state.start_date = datetime.strptime(s_date_str, "%Y-%m-%d").date()
+                except: pass
+                
+            e_date_str = loaded_data.get("end_date")
+            if e_date_str:
+                try: st.session_state.end_date = datetime.strptime(e_date_str, "%Y-%m-%d").date()
+                except: pass
+                
+            st.session_state.travelers = loaded_data.get("travelers", [{"name": "Traveler 1", "color": "#D4E9D7"}])
+            st.session_state.trip_data = loaded_data.get("trip_data", [])
+            
         st.session_state.uploaded_file_id = uploaded_file.file_id # Mark as loaded
+        st.rerun() # Refresh to populate the sidebar text fields
+        
+    # Show success message persistently after the rerun completes
+    if uploaded_file and uploaded_file.file_id == st.session_state.uploaded_file_id:
         st.success("✅ Plan uploaded successfully!")
     
     if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.trip_data = []
+        st.session_state.travelers = [{"name": "Traveler 1", "color": "#D4E9D7"}]
+        st.session_state.trip_name = "Italy Coastline 2026"
+        st.session_state.start_date = datetime.now().date()
+        st.session_state.end_date = (datetime.now() + timedelta(days=7)).date()
         st.session_state.edit_idx = None
         st.session_state.uploaded_file_id = None # Clear upload cache
         st.rerun()
