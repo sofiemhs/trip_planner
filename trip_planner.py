@@ -29,15 +29,28 @@ st.markdown("""
     [data-testid="stSidebar"] p, 
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] span,
-    [data-testid="stSidebar"] .stMarkdown,
-    [data-testid="stFileUploader"] section {
+    [data-testid="stSidebar"] .stMarkdown {
         color: #0B2010 !important;
         font-weight: 600;
     }
     
-    /* Fix for File Uploader Text */
-    [data-testid="stFileUploader"] div div div div {
-        color: #0B2010 !important;
+    /* Make "save plan", "Upload", and "Reset" related buttons and text off-white */
+    [data-testid="stSidebar"] .stDownloadButton button p,
+    [data-testid="stSidebar"] .stFileUploader label p,
+    [data-testid="stSidebar"] .stFileUploader div div div div,
+    [data-testid="stSidebar"] .stFileUploader small,
+    [data-testid="stSidebar"] .stFileUploader button,
+    [data-testid="stSidebar"] .stButton button p {
+        color: #F8F9FA !important; /* Off-white text */
+    }
+
+    /* Add a dark green background to the buttons so the white text is readable */
+    [data-testid="stSidebar"] .stDownloadButton button,
+    [data-testid="stSidebar"] .stFileUploaderDropzone,
+    [data-testid="stSidebar"] .stFileUploader button,
+    [data-testid="stSidebar"] .stButton button {
+        background-color: #2D6A4F !important;
+        border: 1px solid #1E3D24 !important;
     }
 
     /* Activity Cards */
@@ -82,7 +95,7 @@ if 'city_coords' not in st.session_state:
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h1>Trip Setup</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0B2010 !important; text-shadow: none;'>Trip Setup</h1>", unsafe_allow_html=True)
     trip_name = st.text_input("Trip Name", value="Italy Coastline 2026")
     
     col_a, col_b = st.columns(2)
@@ -91,7 +104,7 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("### Travelers")
+    st.markdown("<h3 style='color: #0B2010 !important; text-shadow: none;'>Travelers</h3>", unsafe_allow_html=True)
     temp_travelers = []
     for i, traveler in enumerate(st.session_state.travelers):
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -112,15 +125,15 @@ with st.sidebar:
     
     st.divider()
     
-    st.subheader("Data Management")
+    st.markdown("<h3 style='color: #0B2010 !important; text-shadow: none;'>Data Management</h3>", unsafe_allow_html=True)
     trip_json = json.dumps(st.session_state.trip_data, indent=4)
-    st.download_button("💾 Save Plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
+    st.download_button("💾 save plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
-    uploaded_file = st.file_uploader("📂 Load Plan", type="json")
+    uploaded_file = st.file_uploader("📂 Upload", type="json")
     if uploaded_file:
         st.session_state.trip_data = json.load(uploaded_file)
     
-    if st.button("🗑️ Reset Trip Data", use_container_width=True):
+    if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.trip_data = []
         st.rerun()
 
@@ -194,34 +207,38 @@ date_range = [start_date + timedelta(days=x) for x in range((end_date - start_da
 
 for d in date_range:
     date_str = str(d)
-    day_plans = [i for i in st.session_state.trip_data if i['date'] == date_str]
+    day_plans = [i for i in st.session_state.trip_data if i.get('date') == date_str]
     st.markdown(f"### 🗓️ {d.strftime('%A, %b %d')}")
     
     if not day_plans:
         st.markdown("<p style='color: #A3B18A; font-style: italic;'>No activities.</p>", unsafe_allow_html=True)
     else:
         for idx, item in enumerate(st.session_state.trip_data):
-            if item['date'] == date_str:
+            if item.get('date') == date_str:
+                # Safe fetching of people list
+                people_list = item.get('people', [])
+                
                 # Color Logic
-                if len(item['people']) > 1: card_bg = shared_color
-                elif len(item['people']) == 1:
-                    card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == item['people'][0]), "#FFFFFF")
+                if len(people_list) > 1: card_bg = shared_color
+                elif len(people_list) == 1:
+                    card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#FFFFFF")
                 else: card_bg = "#FFFFFF"
                 
-                border_color = status_colors.get(item['status'], "#333")
+                status_val = item.get('status', 'Needs Review')
+                border_color = status_colors.get(status_val, "#333")
                 
                 with st.container():
                     st.markdown(f"""
                         <div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-size: 1.4rem; font-weight: 700;">{item['activity']} ({item.get('city', 'N/A')})</span>
-                                <span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{item['status'].upper()}</span>
+                                <span style="font-size: 1.4rem; font-weight: 700;">{item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span>
+                                <span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span>
                             </div>
                             <div style="margin-top: 10px;">
-                                {f"📍 <b>Route:</b> {item['start_loc']} → {item['end_loc']}<br>" if item['start_loc'] or item['end_loc'] else ""}
-                                👤 <b>Assignees:</b> {", ".join(item['people'])} | 💰 <b>Cost:</b> ${item['cost']:,.2f}<br>
-                                {f"🔗 <a href='{item['link']}'>Visit Link</a><br>" if item['link'] else ""}
-                                {f"📝 <b>Notes:</b> {item['notes']}" if item['notes'] else ""}
+                                {f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""}
+                                👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>
+                                {f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""}
+                                {f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""}
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
