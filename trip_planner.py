@@ -214,14 +214,15 @@ with st.expander("➕ Add Activity", expanded=False):
         # Row 3
         r3c1, r3c2, r3c3 = st.columns(3)
         status_opts = ["Booked", "Planned but not booked", "Needs Review"]
-        act_status = r3c1.selectbox("Status", status_opts, index=0)
+        act_status = r3c1.selectbox("Status", status_opts, index=1) # Set default to "Planned but not booked"
         act_cost = r3c2.number_input("Cost ($)", min_value=0.0, value=0.0)
         act_date = r3c3.date_input("Date", value=start_date, min_value=start_date, max_value=end_date)
         
         act_notes = st.text_area("Notes")
         
         traveler_names = [t["name"] for t in st.session_state.travelers]
-        act_people = st.multiselect("Assign To", traveler_names, default=traveler_names[:1] if traveler_names else [])
+        # Set default to ALL travelers
+        act_people = st.multiselect("Assign To", traveler_names, default=traveler_names)
         
         if st.form_submit_button("Confirm Activity", use_container_width=True):
             if act_name:
@@ -321,9 +322,9 @@ for d in date_range:
                             # Row 3
                             er3c1, er3c2, er3c3 = st.columns(3)
                             status_opts = ["Booked", "Planned but not booked", "Needs Review"]
-                            def_status = item.get('status', 'Needs Review')
+                            def_status = item.get('status', 'Planned but not booked')
                             if def_status == "Planned": def_status = "Booked" # Catch old saves
-                            stat_idx = status_opts.index(def_status) if def_status in status_opts else 0
+                            stat_idx = status_opts.index(def_status) if def_status in status_opts else 1
                             e_status = er3c1.selectbox("Status", status_opts, index=stat_idx, key=f"estatus_{idx}")
                             e_cost = er3c2.number_input("Cost ($)", min_value=0.0, value=float(item.get('cost', 0.0)), key=f"ecost_{idx}")
                             
@@ -421,15 +422,17 @@ for d in date_range:
                         route_html = f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""
                         notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
                         
-                        # Construct single continuous HTML string with margin-bottom hack to pull the button inside visually
-                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg}; margin-bottom: -60px; padding-bottom: 75px; position: relative;"><div style="display: flex; justify-content: space-between; align-items: flex-start;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px; width: 75%;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
+                        # Construct single continuous HTML string 
+                        # Grid is strictly split 80% (Title) / 20% (Status Bubble) to perfectly align with the button column below
+                        card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg}; margin-bottom: -60px; padding-bottom: 75px; position: relative;"><div style="display: flex; align-items: flex-start;"><div style="width: 80%;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span></div><div style="width: 20%; display: flex; justify-content: flex-start;"><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px; white-space: nowrap;">{status_val.upper()}</span></div></div><div style="margin-top: 10px; width: 75%;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{notes_html}</div></div>"""
                         
                         st.markdown(card_html, unsafe_allow_html=True)
                         
-                        # Just the Pencil Edit Button, pulled up directly under the status bubble using columns
-                        col_empty, col_btn = st.columns([10, 1])
+                        # Use exactly the same 80/20 split for the columns so the button perfectly left-aligns with the status bubble
+                        col_empty, col_btn = st.columns([8, 2])
                         with col_btn:
-                            if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
+                            # use_container_width=False forces the button to be a tiny square aligned to the left edge of its column
+                            if st.button("✏️", key=f"edit_{idx}", use_container_width=False):
                                 st.session_state.edit_idx = idx
                                 st.rerun()
                                 
