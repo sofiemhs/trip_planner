@@ -30,18 +30,18 @@ st.markdown("""
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] .stMarkdown {
-        color: #0B2010 !important;
+        color: #228B22 !important;
         font-weight: 600;
     }
     
-    /* Make "save plan", "Upload", and "Reset" related buttons and text off-white */
+    /* Make "save plan", "Upload", and "Reset" related buttons and text off-white/white */
     [data-testid="stSidebar"] .stDownloadButton button p,
     [data-testid="stSidebar"] .stFileUploader label p,
-    [data-testid="stSidebar"] .stFileUploader div div div div,
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
     [data-testid="stSidebar"] .stFileUploader small,
     [data-testid="stSidebar"] .stFileUploader button,
     [data-testid="stSidebar"] .stButton button p {
-        color: #F8F9FA !important; /* Off-white text */
+        color: #FFFFFF !important; /* Pure white text for the dropzone and buttons */
     }
 
     /* Add a dark green background to the buttons so the white text is readable */
@@ -95,7 +95,7 @@ if 'city_coords' not in st.session_state:
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h1 style='color: #0B2010 !important; text-shadow: none;'>Trip Setup</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #228B22 !important; text-shadow: none;'>Trip Setup</h1>", unsafe_allow_html=True)
     trip_name = st.text_input("Trip Name", value="Italy Coastline 2026")
     
     col_a, col_b = st.columns(2)
@@ -104,7 +104,7 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("<h3 style='color: #0B2010 !important; text-shadow: none;'>Travelers</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #228B22 !important; text-shadow: none;'>Travelers</h3>", unsafe_allow_html=True)
     temp_travelers = []
     for i, traveler in enumerate(st.session_state.travelers):
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -125,13 +125,15 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("<h3 style='color: #0B2010 !important; text-shadow: none;'>Data Management</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #228B22 !important; text-shadow: none;'>Data Management</h3>", unsafe_allow_html=True)
     trip_json = json.dumps(st.session_state.trip_data, indent=4)
     st.download_button("💾 save plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
+    st.caption("How to upload: Click 'Browse files' below and select a previously saved 'trip_plan.json' file to restore your itinerary data.")
     uploaded_file = st.file_uploader("📂 Upload", type="json")
     if uploaded_file:
         st.session_state.trip_data = json.load(uploaded_file)
+        st.success("✅ Plan uploaded successfully!")
     
     if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.trip_data = []
@@ -150,20 +152,6 @@ m2.metric("Trip Duration", f"{(end_date - start_date).days + 1} Days")
 m3.metric("Cities Visited", len(cities_visited))
 
 st.divider()
-
-# --- MAP SECTION ---
-with st.expander("🗺️ Travel Route Map"):
-    st.write("Add your city coordinates here to see them on the map:")
-    map_col1, map_col2, map_col3 = st.columns([2, 1, 1])
-    c_name = map_col1.text_input("City Name")
-    c_lat = map_col2.number_input("Lat", format="%.4f")
-    c_lon = map_col3.number_input("Lon", format="%.4f")
-    if st.button("📍 Add to Map"):
-        st.session_state.city_coords.append({"city": c_name, "lat": c_lat, "lon": c_lon})
-    
-    if st.session_state.city_coords:
-        map_df = pd.DataFrame(st.session_state.city_coords)
-        st.map(map_df)
 
 # --- ADD ACTIVITY ---
 with st.expander("➕ Add / Edit Activity", expanded=False):
@@ -254,3 +242,19 @@ for d in date_range:
                     if b3.button("⬇️", key=f"down_{idx}") and idx < len(st.session_state.trip_data)-1:
                         st.session_state.trip_data[idx], st.session_state.trip_data[idx+1] = st.session_state.trip_data[idx+1], st.session_state.trip_data[idx]
                         st.rerun()
+
+st.divider()
+
+# --- MAP SECTION ---
+with st.expander("🗺️ Travel Route Map"):
+    st.write("Add your city coordinates here to see them on the map:")
+    map_col1, map_col2, map_col3 = st.columns([2, 1, 1])
+    c_name = map_col1.text_input("City Name")
+    c_lat = map_col2.number_input("Lat", format="%.4f")
+    c_lon = map_col3.number_input("Lon", format="%.4f")
+    if st.button("📍 Add to Map"):
+        st.session_state.city_coords.append({"city": c_name, "lat": c_lat, "lon": c_lon})
+    
+    if st.session_state.city_coords:
+        map_df = pd.DataFrame(st.session_state.city_coords)
+        st.map(map_df)
