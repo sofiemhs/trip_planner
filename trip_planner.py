@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import json
+import pydeck as pdk
 
 # --- CONFIG ---
 st.set_page_config(page_title="Trip Planner", layout="wide", page_icon="📍")
@@ -155,7 +156,6 @@ with st.sidebar:
 
 # --- CALCULATIONS ---
 total_cost = sum(item.get('cost', 0.0) for item in st.session_state.trip_data)
-cities_visited = list(set([item.get('city', 'Unknown') for item in st.session_state.trip_data if item.get('city')]))
 
 # --- MAIN CONTENT ---
 st.markdown(f"<h1 style='text-align: center; font-size: 3rem;'>{trip_name}</h1>", unsafe_allow_html=True)
@@ -163,7 +163,7 @@ st.markdown(f"<h1 style='text-align: center; font-size: 3rem;'>{trip_name}</h1>"
 m1, m2, m3 = st.columns(3)
 m1.metric("Total Budget", f"${total_cost:,.2f}")
 m2.metric("Trip Duration", f"{(end_date - start_date).days + 1} Days")
-m3.metric("Cities Visited", len(cities_visited))
+m3.metric("Total Activities", len(st.session_state.trip_data))
 
 st.divider()
 
@@ -176,7 +176,12 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
         f1, f2, f3 = st.columns([2, 1, 1])
         with f1:
             act_name = st.text_input("Activity/Location Name", value=edit_item.get('activity', ''))
-            act_city = st.text_input("City", value=edit_item.get('city', ''))
+            
+            # Manual Activity Type Selection
+            type_opts = ["Excursion", "Travel", "Housing"]
+            def_type = edit_item.get('type', 'Excursion')
+            type_idx = type_opts.index(def_type) if def_type in type_opts else 0
+            act_type = st.selectbox("Activity Type", type_opts, index=type_idx)
             
             # Safe date parsing for edit mode
             def_date = start_date
@@ -213,20 +218,16 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
         if st.form_submit_button(submit_label, use_container_width=True):
             if act_name:
                 
-                # --- AUTO DETECT ACTIVITY TYPE ---
-                detected_type = "Excursion"
-                detected_emoji = "🎒"
-                color_hex = "#EA4335" # Red map pin
-                
-                name_lower = act_name.lower()
-                if act_start and act_end:
-                    detected_type = "Travel"
+                # Apply Emojis and Colors based on manual selection
+                if act_type == "Travel":
                     detected_emoji = "✈️"
                     color_hex = "#4285F4" # Blue map pin
-                elif any(word in name_lower for word in ['hotel', 'airbnb', 'hostel', 'resort', 'villa', 'stay', 'lodge', 'inn']):
-                    detected_type = "Housing"
+                elif act_type == "Housing":
                     detected_emoji = "🏨"
                     color_hex = "#34A853" # Green map pin
+                else:
+                    detected_emoji = "🎒"
+                    color_hex = "#EA4335" # Red map pin
                 
                 # Parse the coordinates safely
                 parsed_lat, parsed_lon = None, None
@@ -241,10 +242,9 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
                 new_data = {
                     "date": str(act_date),
                     "activity": act_name,
-                    "type": detected_type,
+                    "type": act_type,
                     "emoji": detected_emoji,
                     "color": color_hex,
-                    "city": act_city,
                     "coords": act_coords, # Save the raw string so it stays in the text box when editing
                     "lat": parsed_lat,    # Save the parsed float for the map
                     "lon": parsed_lon,    # Save the parsed float for the map
@@ -308,7 +308,7 @@ for d in date_range:
                     notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
                     
                     # Construct single continuous HTML string
-                    card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
+                    card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')}</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
                     
                     st.markdown(card_html, unsafe_allow_html=True)
                     
@@ -321,27 +321,72 @@ st.divider()
 
 # --- MAP SECTION ---
 with st.expander("🗺️ Travel Route Map", expanded=True):
-    st.write("Map pins are automatically generated from the coordinates you add to your planned activities!")
+    st.write("Map pins and connections are automatically generated from the coordinates you add to your planned activities!")
     st.markdown("**Map Legend:** ✈️ Travel (Blue Pin) | 🏨 Housing (Green Pin) | 🎒 Excursion (Red Pin)")
     
-    # Sort activities chronologically to ensure they are parsed in order
+    # Sort activities chronologically to ensure route connects in order
     sorted_activities = sorted(st.session_state.trip_data, key=lambda x: x.get('date', '9999-12-31'))
     
     # Extract only valid coordinates for the map
     map_data = []
+    path_coords = []
+    
     for activity in sorted_activities:
         if activity.get('lat') is not None and activity.get('lon') is not None:
+            # Convert hex string (e.g., "#EA4335") to RGB list (e.g., [234, 67, 53]) for PyDeck
+            hex_c = activity.get('color', '#EA4335').lstrip('#')
+            rgb = [int(hex_c[i:i+2], 16) for i in (0, 2, 4)]
+            
             map_data.append({
+                "name": activity.get("activity", "Unknown"),
                 "lat": activity.get('lat'), 
                 "lon": activity.get('lon'),
-                "color": activity.get('color', '#EA4335') # Defaults to Excursion red if missing
+                "color": rgb
             })
+            path_coords.append([activity.get('lon'), activity.get('lat')])
             
     if map_data:
-        map_df = pd.DataFrame(map_data)
-        st.map(map_df, color="color")
+        # Define PyDeck Scatterplot Layer (The Pins)
+        scatter_layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=map_data,
+            get_position="[lon, lat]",
+            get_color="color",
+            get_radius=10000,
+            radius_scale=1,
+            radius_min_pixels=6,
+            radius_max_pixels=15,
+            pickable=True
+        )
+        
+        # Build layers list
+        layers = [scatter_layer]
+        
+        # Add PyDeck Path Layer (The Connections) if there is more than 1 point
+        if len(path_coords) > 1:
+            path_layer = pdk.Layer(
+                "PathLayer",
+                data=[{"path": path_coords}],
+                get_path="path",
+                get_color=[200, 200, 200, 200], # Light Gray line
+                width_scale=20,
+                width_min_pixels=2,
+                get_width=3
+            )
+            layers.insert(0, path_layer) # Insert path under the pins
+        
+        # Calculate center of the map
+        avg_lat = sum(d['lat'] for d in map_data) / len(map_data)
+        avg_lon = sum(d['lon'] for d in map_data) / len(map_data)
+        
+        # Render the map
+        view_state = pdk.ViewState(latitude=avg_lat, longitude=avg_lon, zoom=5, pitch=0)
+        r = pdk.Deck(layers=layers, initial_view_state=view_state, tooltip={"text": "{name}"})
+        st.pydeck_chart(r)
+        
     else:
         # Default map centered on Peru if no points are added yet
         st.info("No pins added yet. Map is currently centered on Peru.")
-        peru_default = pd.DataFrame([{"lat": -9.1900, "lon": -75.0152, "color": "#EA4335"}])
-        st.map(peru_default, color="color")
+        view_state = pdk.ViewState(latitude=-9.1900, longitude=-75.0152, zoom=5, pitch=0)
+        r = pdk.Deck(initial_view_state=view_state)
+        st.pydeck_chart(r)
