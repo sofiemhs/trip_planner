@@ -103,9 +103,6 @@ if 'trip_data' not in st.session_state:
 if 'travelers' not in st.session_state:
     st.session_state.travelers = [{"name": "Traveler 1", "color": "#D4E9D7"}]
 
-if 'city_coords' not in st.session_state:
-    st.session_state.city_coords = []
-
 if 'edit_idx' not in st.session_state:
     st.session_state.edit_idx = None
 
@@ -192,6 +189,7 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
         with f2:
             act_start = st.text_input("Start Point (Optional)", value=edit_item.get('start_loc', ''))
             act_end = st.text_input("End Point (Optional)", value=edit_item.get('end_loc', ''))
+            act_coords = st.text_input("Coordinates (lat, lon)", placeholder="e.g. 34.07, -118.44", value=edit_item.get('coords', ''))
             act_cost = st.number_input("Cost ($)", min_value=0.0, value=float(edit_item.get('cost', 0.0)))
             
         with f3:
@@ -214,10 +212,42 @@ with st.expander("➕ Add / Edit Activity", expanded=is_edit):
         submit_label = "Update Activity" if is_edit else "Confirm Activity"
         if st.form_submit_button(submit_label, use_container_width=True):
             if act_name:
+                
+                # --- AUTO DETECT ACTIVITY TYPE ---
+                detected_type = "Excursion"
+                detected_emoji = "🎒"
+                color_hex = "#EA4335" # Red map pin
+                
+                name_lower = act_name.lower()
+                if act_start and act_end:
+                    detected_type = "Travel"
+                    detected_emoji = "✈️"
+                    color_hex = "#4285F4" # Blue map pin
+                elif any(word in name_lower for word in ['hotel', 'airbnb', 'hostel', 'resort', 'villa', 'stay', 'lodge', 'inn']):
+                    detected_type = "Housing"
+                    detected_emoji = "🏨"
+                    color_hex = "#34A853" # Green map pin
+                
+                # Parse the coordinates safely
+                parsed_lat, parsed_lon = None, None
+                if act_coords:
+                    try:
+                        lat_str, lon_str = act_coords.split(",")
+                        parsed_lat = float(lat_str.strip())
+                        parsed_lon = float(lon_str.strip())
+                    except ValueError:
+                        st.error("⚠️ Invalid coordinate format. Please use 'lat, lon'. Activity saved without coordinates on the map.")
+                
                 new_data = {
                     "date": str(act_date),
                     "activity": act_name,
+                    "type": detected_type,
+                    "emoji": detected_emoji,
+                    "color": color_hex,
                     "city": act_city,
+                    "coords": act_coords, # Save the raw string so it stays in the text box when editing
+                    "lat": parsed_lat,    # Save the parsed float for the map
+                    "lon": parsed_lon,    # Save the parsed float for the map
                     "start_loc": act_start,
                     "end_loc": act_end,
                     "people": act_people,
@@ -278,7 +308,7 @@ for d in date_range:
                     notes_html = f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""
                     
                     # Construct single continuous HTML string
-                    card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
+                    card_html = f"""<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};"><div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 1.4rem; font-weight: 700;">{item.get('emoji', '🎒')} {item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span><span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span></div><div style="margin-top: 10px;">{route_html}👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>{link_html}{notes_html}</div></div>"""
                     
                     st.markdown(card_html, unsafe_allow_html=True)
                     
@@ -290,25 +320,28 @@ for d in date_range:
 st.divider()
 
 # --- MAP SECTION ---
-with st.expander("🗺️ Travel Route Map"):
-    st.write("Add your location name and paste coordinates (e.g. `34.07, -118.44`) to see them on the map:")
-    map_col1, map_col2 = st.columns([1, 2])
-    c_name = map_col1.text_input("Location Name")
-    c_coords = map_col2.text_input("Coordinates (lat, lon)", placeholder="e.g. 34.0705, -118.4474")
+with st.expander("🗺️ Travel Route Map", expanded=True):
+    st.write("Map pins are automatically generated from the coordinates you add to your planned activities!")
+    st.markdown("**Map Legend:** ✈️ Travel (Blue Pin) | 🏨 Housing (Green Pin) | 🎒 Excursion (Red Pin)")
     
-    if st.button("📍 Add to Map"):
-        if c_name and c_coords:
-            try:
-                lat_str, lon_str = c_coords.split(",")
-                st.session_state.city_coords.append({"city": c_name, "lat": float(lat_str.strip()), "lon": float(lon_str.strip())})
-            except ValueError:
-                st.error("⚠️ Invalid coordinate format. Please paste directly as 'lat, lon'!")
+    # Sort activities chronologically to ensure they are parsed in order
+    sorted_activities = sorted(st.session_state.trip_data, key=lambda x: x.get('date', '9999-12-31'))
     
-    if st.session_state.city_coords:
-        map_df = pd.DataFrame(st.session_state.city_coords)
-        st.map(map_df)
+    # Extract only valid coordinates for the map
+    map_data = []
+    for activity in sorted_activities:
+        if activity.get('lat') is not None and activity.get('lon') is not None:
+            map_data.append({
+                "lat": activity.get('lat'), 
+                "lon": activity.get('lon'),
+                "color": activity.get('color', '#EA4335') # Defaults to Excursion red if missing
+            })
+            
+    if map_data:
+        map_df = pd.DataFrame(map_data)
+        st.map(map_df, color="color")
     else:
         # Default map centered on Peru if no points are added yet
         st.info("No pins added yet. Map is currently centered on Peru.")
-        peru_default = pd.DataFrame([{"lat": -9.1900, "lon": -75.0152}])
-        st.map(peru_default)
+        peru_default = pd.DataFrame([{"lat": -9.1900, "lon": -75.0152, "color": "#EA4335"}])
+        st.map(peru_default, color="color")
