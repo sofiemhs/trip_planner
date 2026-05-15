@@ -34,9 +34,13 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* Make "save plan", "Upload", and "Reset" related buttons and text off-white/white */
+    /* Make specific upload label DARK GREEN */
+    [data-testid="stSidebar"] .stFileUploader label p {
+        color: #004D00 !important; 
+    }
+    
+    /* Make "save plan", dropzone text, and "Reset" related buttons off-white/white */
     [data-testid="stSidebar"] .stDownloadButton button p,
-    [data-testid="stSidebar"] .stFileUploader label p,
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
     [data-testid="stSidebar"] .stFileUploader small,
     [data-testid="stSidebar"] .stFileUploader button,
@@ -95,7 +99,7 @@ if 'city_coords' not in st.session_state:
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h1 style='color: #228B22 !important; text-shadow: none;'>Trip Setup</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #004D00 !important; text-shadow: none;'>Trip Setup</h1>", unsafe_allow_html=True)
     trip_name = st.text_input("Trip Name", value="Italy Coastline 2026")
     
     col_a, col_b = st.columns(2)
@@ -104,7 +108,7 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("<h3 style='color: #228B22 !important; text-shadow: none;'>Travelers</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #004D00 !important; text-shadow: none;'>Travelers</h3>", unsafe_allow_html=True)
     temp_travelers = []
     for i, traveler in enumerate(st.session_state.travelers):
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -125,7 +129,7 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("<h3 style='color: #228B22 !important; text-shadow: none;'>Data Management</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #004D00 !important; text-shadow: none;'>Data Management</h3>", unsafe_allow_html=True)
     trip_json = json.dumps(st.session_state.trip_data, indent=4)
     st.download_button("💾 save plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
@@ -216,20 +220,21 @@ for d in date_range:
                 border_color = status_colors.get(status_val, "#333")
                 
                 with st.container():
+                    # Removed indentation below so Markdown doesn't parse it as a code block!
                     st.markdown(f"""
-                        <div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-size: 1.4rem; font-weight: 700;">{item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span>
-                                <span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span>
-                            </div>
-                            <div style="margin-top: 10px;">
-                                {f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""}
-                                👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>
-                                {f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""}
-                                {f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+<div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 1.4rem; font-weight: 700;">{item.get('activity', 'Unknown')} ({item.get('city', 'N/A')})</span>
+        <span style="font-size: 0.75rem; font-weight: 900; color: white; background: {border_color}; padding: 6px 14px; border-radius: 4px;">{status_val.upper()}</span>
+    </div>
+    <div style="margin-top: 10px;">
+        {f"📍 <b>Route:</b> {item.get('start_loc', '')} → {item.get('end_loc', '')}<br>" if item.get('start_loc') or item.get('end_loc') else ""}
+        👤 <b>Assignees:</b> {", ".join(people_list)} | 💰 <b>Cost:</b> ${item.get('cost', 0.0):,.2f}<br>
+        {f"🔗 <a href='{item.get('link', '')}'>Visit Link</a><br>" if item.get('link') else ""}
+        {f"📝 <b>Notes:</b> {item.get('notes', '')}" if item.get('notes') else ""}
+    </div>
+</div>
+""", unsafe_allow_html=True)
                     
                     # Edit/Move/Delete Buttons
                     b1, b2, b3, b4 = st.columns([1,1,1,5])
