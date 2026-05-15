@@ -427,9 +427,9 @@ for d in date_range:
                         st.markdown(card_html, unsafe_allow_html=True)
                         
                         # Just the Pencil Edit Button, pulled up directly under the status bubble using columns
-                        col_empty, col_btn = st.columns([5, 1.5])
+                        col_empty, col_btn = st.columns([10, 1])
                         with col_btn:
-                            if st.button("✏️ Edit Activity", key=f"edit_{idx}", use_container_width=True):
+                            if st.button("✏️", key=f"edit_{idx}", use_container_width=True):
                                 st.session_state.edit_idx = idx
                                 st.rerun()
                                 
