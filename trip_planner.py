@@ -108,6 +108,9 @@ if 'travelers' not in st.session_state:
 if 'edit_idx' not in st.session_state:
     st.session_state.edit_idx = None
 
+if 'uploaded_file_id' not in st.session_state:
+    st.session_state.uploaded_file_id = None
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h1 style='color: #004D00 !important; text-shadow: none !important; opacity: 1 !important;'>Trip Setup</h1>", unsafe_allow_html=True)
@@ -146,13 +149,17 @@ with st.sidebar:
     
     st.caption("How to upload: Click 'Browse files' below and select a previously saved 'trip_plan.json' file to restore your itinerary data.")
     uploaded_file = st.file_uploader("📂 Upload", type="json")
-    if uploaded_file:
+    
+    # Check if a new file was uploaded to prevent constant overwriting
+    if uploaded_file and uploaded_file.file_id != st.session_state.uploaded_file_id:
         st.session_state.trip_data = json.load(uploaded_file)
+        st.session_state.uploaded_file_id = uploaded_file.file_id # Mark as loaded
         st.success("✅ Plan uploaded successfully!")
     
     if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.trip_data = []
         st.session_state.edit_idx = None
+        st.session_state.uploaded_file_id = None # Clear upload cache
         st.rerun()
 
 # --- CALCULATIONS ---
@@ -208,6 +215,7 @@ with st.expander("➕ Add Activity", expanded=False):
         r2c1, r2c2, r2c3 = st.columns(3)
         type_opts = ["Excursion", "Travel", "Housing"]
         act_type = r2c1.selectbox("Activity Type", type_opts, index=0)
+        travel_method = r2c1.selectbox("Travel Method (If Travel)", ["Plane", "Train", "Bus", "Boat"])
         act_end = r2c2.text_input("End Point (Optional)")
         act_coords_end = r2c3.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12")
         
@@ -229,7 +237,10 @@ with st.expander("➕ Add Activity", expanded=False):
                 
                 # Apply Emojis and Colors based on manual selection
                 if act_type == "Travel":
-                    detected_emoji, color_hex = "✈️", "#4285F4"
+                    if travel_method == "Plane": detected_emoji, color_hex = "✈️", "#4285F4"
+                    elif travel_method == "Train": detected_emoji, color_hex = "🚆", "#4285F4"
+                    elif travel_method == "Bus": detected_emoji, color_hex = "🚌", "#4285F4"
+                    elif travel_method == "Boat": detected_emoji, color_hex = "🚢", "#4285F4"
                 elif act_type == "Housing":
                     detected_emoji, color_hex = "🏨", "#34A853"
                 else:
@@ -259,6 +270,7 @@ with st.expander("➕ Add Activity", expanded=False):
                     "date": str(act_date),
                     "activity": act_name,
                     "type": act_type,
+                    "travel_method": travel_method,
                     "emoji": detected_emoji,
                     "color": color_hex,
                     "coords_start": act_coords_start,
@@ -315,6 +327,12 @@ for d in date_range:
                             def_type = item.get('type', 'Excursion')
                             type_idx = type_opts.index(def_type) if def_type in type_opts else 0
                             e_type = er2c1.selectbox("Activity Type", type_opts, index=type_idx, key=f"etype_{idx}")
+                            
+                            method_opts = ["Plane", "Train", "Bus", "Boat"]
+                            def_method = item.get('travel_method', 'Plane')
+                            meth_idx = method_opts.index(def_method) if def_method in method_opts else 0
+                            e_method = er2c1.selectbox("Travel Method (If Travel)", method_opts, index=meth_idx, key=f"emethod_{idx}")
+                            
                             e_end = er2c2.text_input("End Point (Optional)", value=item.get('end_loc', ''), key=f"eend_{idx}")
                             val_c_end = item.get('coords_end', '')
                             e_coords_end = er2c3.text_input("End Coords (lat, lon)", placeholder="e.g. 51.50, -0.12", value=val_c_end, key=f"ecoords_e_{idx}")
@@ -342,7 +360,10 @@ for d in date_range:
                             if st.form_submit_button("💾 Save Changes", use_container_width=True):
                                 if e_name:
                                     if e_type == "Travel":
-                                        detected_emoji, color_hex = "✈️", "#4285F4"
+                                        if e_method == "Plane": detected_emoji, color_hex = "✈️", "#4285F4"
+                                        elif e_method == "Train": detected_emoji, color_hex = "🚆", "#4285F4"
+                                        elif e_method == "Bus": detected_emoji, color_hex = "🚌", "#4285F4"
+                                        elif e_method == "Boat": detected_emoji, color_hex = "🚢", "#4285F4"
                                     elif e_type == "Housing":
                                         detected_emoji, color_hex = "🏨", "#34A853"
                                     else:
@@ -372,6 +393,7 @@ for d in date_range:
                                         "date": str(e_date),
                                         "activity": e_name,
                                         "type": e_type,
+                                        "travel_method": e_method,
                                         "emoji": detected_emoji,
                                         "color": color_hex,
                                         "coords_start": e_coords_start,
@@ -458,7 +480,7 @@ st.divider()
 # --- MAP SECTION ---
 with st.expander("🗺️ Travel Route Map", expanded=True):
     st.write("Map pins and connections are automatically generated from the coordinates you add to your planned activities!")
-    st.markdown("**Map Legend:** ✈️ Travel (Blue Pin) | 🏨 Housing (Green Pin) | 🎒 Excursion (Red Pin)")
+    st.markdown("**Map Legend:** ✈️/🚆/🚌/🚢 Travel (Blue Pin) | 🏨 Housing (Green Pin) | 🎒 Excursion (Red Pin)")
     
     # Sort activities chronologically to ensure route connects in order
     sorted_activities = sorted(st.session_state.trip_data, key=lambda x: x.get('date', '9999-12-31'))
