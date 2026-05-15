@@ -123,11 +123,15 @@ if 'uploaded_file_id' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h1 style='color: #004D00 !important; text-shadow: none !important; opacity: 1 !important;'>Trip Setup</h1>", unsafe_allow_html=True)
-    trip_name = st.text_input("Trip Name", key="trip_name")
+    trip_name = st.text_input("Trip Name", value=st.session_state.trip_name)
+    st.session_state.trip_name = trip_name # Sync value to state safely
     
     col_a, col_b = st.columns(2)
-    start_date = col_a.date_input("Start Date", key="start_date")
-    end_date = col_b.date_input("End Date", key="end_date")
+    start_date = col_a.date_input("Start Date", value=st.session_state.start_date)
+    st.session_state.start_date = start_date # Sync value to state safely
+    
+    end_date = col_b.date_input("End Date", value=st.session_state.end_date)
+    st.session_state.end_date = end_date # Sync value to state safely
     
     st.divider()
     
@@ -176,7 +180,7 @@ with st.sidebar:
         if isinstance(loaded_data, list):
             st.session_state.trip_data = loaded_data
         else:
-            # Load new format saves
+            # Load new format saves safely
             st.session_state.trip_name = loaded_data.get("trip_name", "Italy Coastline 2026")
             
             s_date_str = loaded_data.get("start_date")
