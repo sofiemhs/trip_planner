@@ -114,6 +114,9 @@ if 'trip_data' not in st.session_state:
 if 'travelers' not in st.session_state:
     st.session_state.travelers = [{"name": "Traveler 1", "color": "#D4E9D7"}]
 
+if 'shared_color' not in st.session_state:
+    st.session_state.shared_color = "#FFF9C4"
+
 if 'edit_idx' not in st.session_state:
     st.session_state.edit_idx = None
 
@@ -152,7 +155,8 @@ with st.sidebar:
         st.session_state.travelers.append({"name": f"Traveler {len(st.session_state.travelers)+1}", "color": "#FFFFFF"})
         st.rerun()
     
-    shared_color = st.color_picker("Shared Color", "#FFF9C4")
+    shared_color = st.color_picker("Shared Color", value=st.session_state.shared_color)
+    st.session_state.shared_color = shared_color # Sync value to state safely
     
     st.divider()
     
@@ -163,13 +167,17 @@ with st.sidebar:
         "trip_name": st.session_state.trip_name,
         "start_date": str(st.session_state.start_date),
         "end_date": str(st.session_state.end_date),
+        "shared_color": st.session_state.shared_color,
         "travelers": st.session_state.travelers,
         "trip_data": st.session_state.trip_data
     }
     trip_json = json.dumps(export_data, indent=4)
-    st.download_button("💾 save plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
-    st.caption("How to upload: Click 'Browse files' below and select a previously saved 'trip_plan.json' file to restore your itinerary data.")
+    # Generate dynamic file name
+    safe_filename = f"{st.session_state.trip_name.replace(' ', '_')}.json" if st.session_state.trip_name else "trip_plan.json"
+    st.download_button("💾 save plan", data=trip_json, file_name=safe_filename, use_container_width=True)
+    
+    st.caption("How to upload: Click 'Browse files' below and select a previously saved JSON file to restore your itinerary data.")
     uploaded_file = st.file_uploader("📂 Upload", type="json")
     
     # Check if a new file was uploaded to prevent constant overwriting
@@ -192,11 +200,18 @@ with st.sidebar:
             if e_date_str:
                 try: st.session_state.end_date = datetime.strptime(e_date_str, "%Y-%m-%d").date()
                 except: pass
-                
+            
+            st.session_state.shared_color = loaded_data.get("shared_color", "#FFF9C4")
             st.session_state.travelers = loaded_data.get("travelers", [{"name": "Traveler 1", "color": "#D4E9D7"}])
             st.session_state.trip_data = loaded_data.get("trip_data", [])
             
         st.session_state.uploaded_file_id = uploaded_file.file_id # Mark as loaded
+        
+        # Clear Streamlit's widget cache for the dynamic inputs so they correctly pull the newly loaded values
+        for key in list(st.session_state.keys()):
+            if key.startswith("tname_") or key.startswith("tcol_"):
+                del st.session_state[key]
+                
         st.rerun() # Refresh to populate the sidebar text fields
         
     # Show success message persistently after the rerun completes
@@ -209,8 +224,15 @@ with st.sidebar:
         st.session_state.trip_name = "Italy Coastline 2026"
         st.session_state.start_date = datetime.now().date()
         st.session_state.end_date = (datetime.now() + timedelta(days=7)).date()
+        st.session_state.shared_color = "#FFF9C4"
         st.session_state.edit_idx = None
         st.session_state.uploaded_file_id = None # Clear upload cache
+        
+        # Clear Streamlit's widget cache for the dynamic inputs
+        for key in list(st.session_state.keys()):
+            if key.startswith("tname_") or key.startswith("tcol_"):
+                del st.session_state[key]
+                
         st.rerun()
 
 # --- CALCULATIONS ---
@@ -492,7 +514,7 @@ for d in date_range:
                         
                     # 2. Side Bar Color (Left Border, Based on Assigned People)
                     if len(people_list) > 1: 
-                        left_border_color = shared_color
+                        left_border_color = st.session_state.shared_color
                     elif len(people_list) == 1:
                         left_border_color = next((t["color"] for t in st.session_state.travelers if t["name"] == people_list[0]), "#CCCCCC")
                     else: 
