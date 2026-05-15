@@ -4,40 +4,48 @@ from datetime import datetime, timedelta
 import json
 
 # --- CONFIG ---
-st.set_page_config(page_title="Jungle Trip Planner", layout="wide", page_icon="🌿")
+st.set_page_config(page_title="Trip Planner", layout="wide", page_icon="📍")
 
-# --- JUNGLE THEME (CSS) ---
+# --- CUSTOM THEME (CSS) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap');
 
-    /* Global Font & Jungle Background */
+    /* Global Font & Background */
     html, body, [class*="css"] {
         font-family: 'Outfit', sans-serif;
-        color: #1B2E1D;
     }
 
     .stApp {
         background: linear-gradient(135deg, #0B2010 0%, #1E3D24 100%);
     }
 
-    /* Sidebar - Earthy Look */
+    /* Sidebar - High Contrast Styling */
     [data-testid="stSidebar"] {
-        background-color: #F5F5DC !important;
+        background-color: #F5F5DC !important; /* Beige background */
         border-right: 2px solid #3D5A45;
     }
 
-    /* Activity Cards - High Readability */
-    .jungle-card {
-        background-color: #FFFFFF; /* Pure white/cream for max contrast */
+    /* Force all sidebar text to be Dark Forest Green */
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #0B2010 !important;
+        font-weight: 600;
+    }
+
+    /* Activity Cards */
+    .activity-card {
+        background-color: #FFFFFF;
         padding: 22px;
         border-radius: 18px;
         margin-bottom: 18px;
         box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        color: #1B2E1D !important; /* Dark Jungle Green Text */
+        color: #1B2E1D !important;
     }
     
-    .jungle-card b, .jungle-card span {
+    .activity-card b, .activity-card span {
         color: #1B2E1D !important;
     }
 
@@ -47,13 +55,6 @@ st.markdown("""
         text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
 
-    /* Input Form Styling */
-    .stForm {
-        background-color: rgba(255, 255, 255, 0.9);
-        border-radius: 15px;
-        padding: 20px;
-    }
-    
     /* Metrics */
     [data-testid="stMetricValue"] {
         color: #B5E48C !important;
@@ -68,69 +69,82 @@ st.markdown("""
 if 'trip_data' not in st.session_state:
     st.session_state.trip_data = []
 
+if 'travelers' not in st.session_state:
+    # Start with 1 traveler
+    st.session_state.travelers = [{"name": "Traveler 1", "color": "#D4E9D7"}]
+
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h1 style='color:#2D4739 !important;'>🌴 Expedition Setup</h1>", unsafe_allow_html=True)
-    trip_name = st.text_input("Trip Name", value="Amazon Expedition 2026")
+    st.markdown("<h1>Trip Setup</h1>", unsafe_allow_html=True)
+    trip_name = st.text_input("Trip Name", value="Italy Coastline 2026")
     
-    col1, col2 = st.columns(2)
-    start_date = col1.date_input("Start", datetime.now())
-    end_date = col2.date_input("End", datetime.now() + timedelta(days=7))
-    
-    st.divider()
-    
-    st.markdown("### 🐾 Explorer Colors")
-    p1_name = st.text_input("Explorer 1", value="Tarzan")
-    p1_color = st.color_picker(f"Color for {p1_name}", "#D4E9D7") # Pale Mint
-    
-    p2_name = st.text_input("Explorer 2", value="Jane")
-    p2_color = st.color_picker(f"Color for {p2_name}", "#FFE8D6") # Sandy Peach
-    
-    shared_color = st.color_picker("Both Together", "#FFF9C4") # Sunbeam Yellow
+    col_a, col_b = st.columns(2)
+    start_date = col_a.date_input("Start Date", datetime.now())
+    end_date = col_b.date_input("End Date", datetime.now() + timedelta(days=7))
     
     st.divider()
     
-    # Save/Load
-    st.subheader("💾 Field Notes")
+    st.markdown("### Travelers")
+    
+    # Dynamic Traveler Management
+    updated_travelers = []
+    for i, traveler in enumerate(st.session_state.travelers):
+        c1, c2 = st.columns([2, 1])
+        t_name = c1.text_input(f"Name {i+1}", value=traveler["name"], key=f"tname_{i}")
+        t_color = c2.color_picker(f"Color", value=traveler["color"], key=f"tcol_{i}")
+        updated_travelers.append({"name": t_name, "color": t_color})
+    
+    st.session_state.travelers = updated_travelers
+
+    if st.button("➕ Add Traveler"):
+        st.session_state.travelers.append({"name": f"Traveler {len(st.session_state.travelers)+1}", "color": "#FFFFFF"})
+        st.rerun()
+    
+    shared_color = st.color_picker("Color for Multiple People", "#FFF9C4")
+    
+    st.divider()
+    
+    st.subheader("Data Management")
     trip_json = json.dumps(st.session_state.trip_data, indent=4)
-    st.download_button("💾 Save to Device", data=trip_json, file_name="jungle_plan.json", use_container_width=True)
+    st.download_button("💾 Save Plan", data=trip_json, file_name="trip_plan.json", use_container_width=True)
     
-    uploaded_file = st.file_uploader("📂 Import Plan", type="json")
+    uploaded_file = st.file_uploader("📂 Load Plan", type="json")
     if uploaded_file:
         st.session_state.trip_data = json.load(uploaded_file)
     
-    if st.button("🔥 Burn All Data", use_container_width=True):
+    if st.button("🗑️ Reset Trip Data", use_container_width=True):
         st.session_state.trip_data = []
         st.rerun()
 
-# --- MAIN HEADER ---
-st.markdown(f"<h1 style='text-align: center; font-size: 3rem;'>🎋 {trip_name}</h1>", unsafe_allow_html=True)
+# --- MAIN CONTENT ---
+st.markdown(f"<h1 style='text-align: center; font-size: 3rem;'>{trip_name}</h1>", unsafe_allow_html=True)
 
-# Calculation Logic
+# Totals
 df = pd.DataFrame(st.session_state.trip_data)
 total_cost = df['cost'].sum() if not df.empty else 0.0
 
 m1, m2, m3 = st.columns(3)
-m1.metric("Total Supplies Cost", f"${total_cost:,.2f}")
-m2.metric("Nights in Jungle", (end_date - start_date).days)
-m3.metric("Markers Placed", len(st.session_state.trip_data))
+m1.metric("Total Budget", f"${total_cost:,.2f}")
+m2.metric("Trip Duration", f"{(end_date - start_date).days + 1} Days")
+m3.metric("Activities", len(st.session_state.trip_data))
 
 st.divider()
 
 # --- ADD ACTIVITY ---
-with st.expander("📍 Mark a New Location / Activity", expanded=False):
-    with st.form("jungle_form", clear_on_submit=True):
+with st.expander("➕ Add Activity", expanded=False):
+    with st.form("activity_form", clear_on_submit=True):
         f1, f2 = st.columns([2, 1])
         with f1:
-            act_name = st.text_input("What's the plan?")
+            act_name = st.text_input("Activity/Location Name")
             act_date = st.date_input("Date", min_value=start_date, max_value=end_date)
         with f2:
             act_cost = st.number_input("Cost ($)", min_value=0.0)
-            act_status = st.selectbox("Current Status", ["Planned", "Planned but not booked", "Needs Review"])
+            act_status = st.selectbox("Status", ["Planned", "Planned but not booked", "Needs Review"])
             
-        act_people = st.multiselect("Assign To", [p1_name, p2_name], default=[p1_name, p2_name])
+        traveler_names = [t["name"] for t in st.session_state.travelers]
+        act_people = st.multiselect("Assign To", traveler_names, default=traveler_names[:1])
         
-        if st.form_submit_button("🍃 Add to Map", use_container_width=True):
+        if st.form_submit_button("Confirm Activity", use_container_width=True):
             if act_name:
                 st.session_state.trip_data.append({
                     "date": str(act_date),
@@ -142,10 +156,10 @@ with st.expander("📍 Mark a New Location / Activity", expanded=False):
                 st.rerun()
 
 # --- ITINERARY ---
-status_border_colors = {
-    "Planned": "#2D6A4F",              # Deep Leaf Green
-    "Planned but not booked": "#FFB703", # Sunset Yellow
-    "Needs Review": "#BC4749"           # Predator Red
+status_colors = {
+    "Planned": "#2D6A4F",              # Green
+    "Planned but not booked": "#FFB703", # Yellow
+    "Needs Review": "#BC4749"           # Red
 }
 
 date_range = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
@@ -157,22 +171,23 @@ for d in date_range:
     st.markdown(f"### 🗓️ {d.strftime('%A, %b %d')}")
     
     if not day_plans:
-        st.markdown("<p style='color: #A3B18A;'>No paths cleared for this day.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #A3B18A; font-style: italic;'>No activities planned.</p>", unsafe_allow_html=True)
     else:
         for item in day_plans:
-            # Routing Color Logic
-            if p1_name in item['people'] and p2_name in item['people']:
+            # Color Logic
+            if len(item['people']) > 1:
                 card_bg = shared_color
-            elif p1_name in item['people']:
-                card_bg = p1_color
+            elif len(item['people']) == 1:
+                # Find the color of the specific person
+                person_name = item['people'][0]
+                card_bg = next((t["color"] for t in st.session_state.travelers if t["name"] == person_name), "#FFFFFF")
             else:
-                card_bg = p2_color
+                card_bg = "#FFFFFF"
                 
-            border_color = status_border_colors.get(item['status'], "#333")
+            border_color = status_colors.get(item['status'], "#333")
             
-            # THE JUNGLE CARD
             st.markdown(f"""
-                <div class="jungle-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};">
+                <div class="activity-card" style="border-left: 12px solid {border_color}; background-color: {card_bg};">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-size: 1.4rem; font-weight: 700;">{item['activity']}</span>
                         <span style="
